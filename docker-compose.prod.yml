@@ -1,0 +1,54 @@
+name: unihub-support-service-prod
+
+services:
+  support-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: unihub-support-service-prod
+    ports:
+      - "8007:8007"
+    environment:
+      PORT: 8007
+      NODE_ENV: production
+      MONGODB_URI: ${MONGODB_URI}
+      MONGO_NETWORK_FAMILY: ${MONGO_NETWORK_FAMILY:-4}
+      MONGO_SERVER_SELECTION_TIMEOUT_MS: ${MONGO_SERVER_SELECTION_TIMEOUT_MS:-5000}
+      REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      AUTH_SERVICE_TIMEOUT_MS: ${AUTH_SERVICE_TIMEOUT_MS:-2500}
+      AUTH_USER_CACHE_TTL_MS: ${AUTH_USER_CACHE_TTL_MS:-60000}
+      AUTH_USER_STALE_TTL_MS: ${AUTH_USER_STALE_TTL_MS:-300000}
+      # In Docker, use the shared-network service names (see unihub-observability's
+      # PRODUCTION_DEPLOYMENT.md) rather than host-published ports.
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+      AWS_S3_BASE_URL: ${AWS_S3_BASE_URL}
+      MAX_ATTACHMENT_SIZE_MB: ${MAX_ATTACHMENT_SIZE_MB:-10}
+      MAX_ATTACHMENTS_PER_TICKET: ${MAX_ATTACHMENTS_PER_TICKET:-5}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      SUPPORT_CHAT_MODEL: ${SUPPORT_CHAT_MODEL:-claude-haiku-4-5}
+      SUPPORT_CHAT_TIMEOUT_MS: ${SUPPORT_CHAT_TIMEOUT_MS:-15000}
+      SUPPORT_CHAT_MAX_TOKENS: ${SUPPORT_CHAT_MAX_TOKENS:-800}
+      SUPPORT_CHAT_RATE_LIMIT_PER_HOUR: ${SUPPORT_CHAT_RATE_LIMIT_PER_HOUR:-30}
+    restart: unless-stopped
+
+    networks:
+      - default
+      - unihub-backend
+      - observability
+
+networks:
+  unihub-backend:
+    name: ${BACKEND_NETWORK:-unihub-backend}
+    external: true
+  observability:
+    name: ${OBSERVABILITY_NETWORK:-unihub-observability}
+    external: true

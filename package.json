@@ -1,0 +1,35 @@
+{
+  "name": "support-service",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "UniHub Support Service — help center, support tickets, grievance portal, and AI-assisted chat",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --import ./src/instrument.js src/server.js",
+    "dev": "nodemon --exec \"node --import ./src/instrument.js\" src/server.js",
+    "test": "node --test",
+    "seed:faqs": "node scripts/seedFaqs.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/lib-storage": "^3.1075.0",
+    "@aws-sdk/s3-request-presigner": "^3.1078.0",
+    "@sentry/node": "^10.66.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.2.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.0",
+    "prom-client": "^15.1.3",
+    "winston": "^3.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
