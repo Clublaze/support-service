@@ -12,6 +12,9 @@ const env = {
   isDev: (process.env.NODE_ENV || 'development') === 'development',
 
   mongoUri: process.env.MONGODB_URI,
+  mongoDnsServers: process.env.MONGO_DNS_SERVERS
+    ? process.env.MONGO_DNS_SERVERS.split(',').map((server) => server.trim()).filter(Boolean)
+    : [],
   mongoStartupRetryMs: positiveInteger(process.env.MONGO_STARTUP_RETRY_MS, 10000),
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 

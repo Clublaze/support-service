@@ -5,7 +5,7 @@
 // Usage: npm run seed:faqs
 
 import mongoose from 'mongoose';
-import env from '../src/config/env.js';
+import connectDB from '../src/config/db.js';
 import FaqArticle from '../src/models/FaqArticle.model.js';
 
 const STARTER_FAQS = [
@@ -66,7 +66,7 @@ const STARTER_FAQS = [
 ];
 
 async function run() {
-  await mongoose.connect(env.mongoUri);
+  await connectDB();
   console.log(`Connected. Seeding ${STARTER_FAQS.length} starter FAQs...`);
 
   for (const faq of STARTER_FAQS) {

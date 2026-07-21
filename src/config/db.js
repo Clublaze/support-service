@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import dns from 'node:dns';
 import logger from '../utils/logger.js';
 import env from './env.js';
 
@@ -18,6 +19,10 @@ const mongoOptions = {
 
 const connectDB = async () => {
   try {
+    if (env.mongoDnsServers.length > 0) {
+      dns.setServers(env.mongoDnsServers);
+    }
+
     const conn = await mongoose.connect(env.mongoUri, mongoOptions);
 
     logger.info(`MongoDB connected: ${conn.connection.host}`);
