@@ -1,6 +1,7 @@
 import FaqArticle from '../models/FaqArticle.model.js';
 import AppError from '../utils/AppError.js';
-import { SUPPORT_CATEGORIES } from '../constants/support.constants.js';
+import auditServiceClient from '../utils/auditServiceClient.js';
+import { SUPPORT_CATEGORIES, AUDIT_ENTITY, AUDIT_ACTION } from '../constants/support.constants.js';
 
 const scopeFilter = (universityId) => ({ $or: [{ universityId }, { universityId: null }] });
 
@@ -82,6 +83,24 @@ class FaqService {
       createdBy: adminId,
       updatedBy: adminId,
     });
+
+    // Audited against the acting admin's university, never the article's own
+    // scope — a platform-wide article has universityId null, and the audit log
+    // needs to know which tenant's admin published it.
+    auditServiceClient.record({
+      universityId,
+      entityType: AUDIT_ENTITY.FAQ,
+      entityId: faq._id.toString(),
+      action: AUDIT_ACTION.FAQ_CREATED,
+      performedBy: adminId,
+      metadata: {
+        category: faq.category,
+        question: faq.question,
+        isPublished: faq.isPublished,
+        platformWide: faq.universityId === null,
+      },
+    });
+
     return faq.toObject();
   }
 
@@ -92,12 +111,36 @@ class FaqService {
       { new: true, runValidators: true }
     );
     if (!faq) throw new AppError('Help article not found.', 404);
+
+    auditServiceClient.record({
+      universityId,
+      entityType: AUDIT_ENTITY.FAQ,
+      entityId: faq._id.toString(),
+      action: AUDIT_ACTION.FAQ_UPDATED,
+      performedBy: adminId,
+      // Field names only, not values: enough to see what was touched without
+      // duplicating article bodies into the audit log on every edit.
+      metadata: { fields: Object.keys(data), question: faq.question },
+    });
+
     return faq.toObject();
   }
 
-  async remove(universityId, id) {
+  async remove(universityId, adminId, id) {
+    // Read before delete so the audit entry can say what was removed — after
+    // deleteOne there is nothing left to describe.
+    const faq = await FaqArticle.findOne({ _id: id, ...scopeFilter(universityId) }).lean();
     const result = await FaqArticle.deleteOne({ _id: id, ...scopeFilter(universityId) });
     if (result.deletedCount === 0) throw new AppError('Help article not found.', 404);
+
+    auditServiceClient.record({
+      universityId,
+      entityType: AUDIT_ENTITY.FAQ,
+      entityId: id,
+      action: AUDIT_ACTION.FAQ_DELETED,
+      performedBy: adminId,
+      metadata: { category: faq?.category, question: faq?.question },
+    });
   }
 }
 

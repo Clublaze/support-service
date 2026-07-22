@@ -60,7 +60,7 @@ class TicketController {
 
   async getForAdmin(req, res, next) {
     try {
-      const result = await ticketService.getForAdmin(req.universityId, req.params.id);
+      const result = await ticketService.getForAdmin(req.universityId, req.params.id, req.user.id);
       res.success(result);
     } catch (err) {
       next(err);
@@ -72,6 +72,7 @@ class TicketController {
       const ticket = await ticketService.updateAsAdmin({
         universityId: req.universityId,
         ticketId: req.params.id,
+        adminId: req.user.id,
         updates: req.body,
       });
       res.success(ticket, 'Ticket updated');

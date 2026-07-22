@@ -57,3 +57,34 @@ export const GRIEVANCE_CATEGORIES = Object.freeze([
 ]);
 
 export const ADMIN_USER_TYPES = Object.freeze(['UNIVERSITY_ADMIN', 'ADMIN', 'SUPER_ADMIN']);
+
+// Mirrors the support-domain entries in club-service's AUDIT_ACTIONS /
+// AUDIT_ENTITY_TYPE. club-service validates against its own copy and rejects
+// anything unrecognised, so these two lists must stay in step — that rejection
+// is deliberate: a typo'd action would otherwise be stored and then never
+// match an audit-feed filter.
+export const AUDIT_ENTITY = Object.freeze({
+  TICKET: 'TICKET',
+  GRIEVANCE: 'GRIEVANCE',
+  FAQ: 'FAQ',
+});
+
+export const AUDIT_ACTION = Object.freeze({
+  TICKET_CREATED: 'TICKET_CREATED',
+  TICKET_STATUS_CHANGED: 'TICKET_STATUS_CHANGED',
+  TICKET_PRIORITY_CHANGED: 'TICKET_PRIORITY_CHANGED',
+  TICKET_ASSIGNED: 'TICKET_ASSIGNED',
+  TICKET_UNASSIGNED: 'TICKET_UNASSIGNED',
+  TICKET_REPLIED_BY_ADMIN: 'TICKET_REPLIED_BY_ADMIN',
+  TICKET_INTERNAL_NOTE_ADDED: 'TICKET_INTERNAL_NOTE_ADDED',
+  GRIEVANCE_FILED: 'GRIEVANCE_FILED',
+  GRIEVANCE_ACCESSED: 'GRIEVANCE_ACCESSED',
+  FAQ_CREATED: 'FAQ_CREATED',
+  FAQ_UPDATED: 'FAQ_UPDATED',
+  FAQ_DELETED: 'FAQ_DELETED',
+});
+
+// An anonymous grievance still stores requesterId (abuse prevention), but the
+// audit trail must not become the back door that undoes the anonymity the UI
+// promises. Anonymous filings are recorded against this sentinel instead.
+export const ANONYMOUS_ACTOR = 'ANONYMOUS';

@@ -35,6 +35,9 @@ services:
       # host.docker.internal lets the container reach services running on your machine
       AUTH_SERVICE_URL: http://host.docker.internal:8001
       NOTIFICATION_SERVICE_URL: http://host.docker.internal:8004
+      # club-service owns the shared audit log; see utils/auditServiceClient.js
+      CLUB_SERVICE_URL: http://host.docker.internal:8002
+      AUDIT_SERVICE_TIMEOUT_MS: ${AUDIT_SERVICE_TIMEOUT_MS:-3000}
 
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
 

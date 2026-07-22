@@ -6,8 +6,29 @@ import logger from '../utils/logger.js';
 import { uploadFile } from '../utils/s3.util.js';
 import authServiceClient from '../utils/authServiceClient.js';
 import notificationServiceClient from '../utils/notificationServiceClient.js';
+import auditServiceClient from '../utils/auditServiceClient.js';
 import { ticketsCreatedTotal } from '../utils/metrics.js';
-import { TICKET_STATUS, TICKET_TYPE, MESSAGE_AUTHOR_TYPE, OPEN_TICKET_STATUSES } from '../constants/support.constants.js';
+import {
+  TICKET_STATUS,
+  TICKET_TYPE,
+  MESSAGE_AUTHOR_TYPE,
+  OPEN_TICKET_STATUSES,
+  AUDIT_ENTITY,
+  AUDIT_ACTION,
+  ANONYMOUS_ACTOR,
+} from '../constants/support.constants.js';
+
+// Grievances are audited under their own entity type so the confidential track
+// can be reviewed on its own in the audit feed.
+const auditEntityFor = (ticket) =>
+  ticket.type === TICKET_TYPE.GRIEVANCE ? AUDIT_ENTITY.GRIEVANCE : AUDIT_ENTITY.TICKET;
+
+// Fire-and-forget. auditServiceClient never throws, but the promise is still
+// explicitly detached so a slow club-service can't add latency to the request
+// that triggered it.
+const audit = (entry) => {
+  auditServiceClient.record(entry);
+};
 
 const uploadAttachments = async (files, ticketFolder) => {
   if (!files?.length) return [];
@@ -47,6 +68,25 @@ class TicketService {
     });
 
     ticketsCreatedTotal.inc({ type, source });
+
+    audit({
+      universityId,
+      entityType: auditEntityFor(ticket),
+      entityId: ticket._id.toString(),
+      action: ticket.type === TICKET_TYPE.GRIEVANCE
+        ? AUDIT_ACTION.GRIEVANCE_FILED
+        : AUDIT_ACTION.TICKET_CREATED,
+      // See ANONYMOUS_ACTOR: recording the real requesterId here would make the
+      // audit feed a de-anonymisation tool for the very grievances it protects.
+      performedBy: ticket.isAnonymous ? ANONYMOUS_ACTOR : requesterId,
+      metadata: {
+        ticketType: ticket.type,
+        category: ticket.category,
+        source,
+        isAnonymous: ticket.isAnonymous,
+        attachmentCount: attachmentUrls.length,
+      },
+    });
 
     // Best-effort: a notification failure must never fail ticket creation.
     authServiceClient
@@ -134,7 +174,7 @@ class TicketService {
     };
   }
 
-  async getForAdmin(universityId, ticketId) {
+  async getForAdmin(universityId, ticketId, adminId) {
     const ticket = await Ticket.findOne({ _id: ticketId, universityId });
     if (!ticket) throw new AppError('Ticket not found.', 404);
 
@@ -143,14 +183,36 @@ class TicketService {
       ticket.isAnonymous ? null : authServiceClient.getUser(ticket.requesterId),
     ]);
 
+    // Grievance reads are audited; ordinary support reads are not. Logging
+    // every ticket view would bury the entries that matter under noise, and the
+    // grievance track is the one carrying a confidentiality promise.
+    if (ticket.type === TICKET_TYPE.GRIEVANCE) {
+      audit({
+        universityId,
+        entityType: AUDIT_ENTITY.GRIEVANCE,
+        entityId: ticket._id.toString(),
+        action: AUDIT_ACTION.GRIEVANCE_ACCESSED,
+        performedBy: adminId,
+        metadata: { category: ticket.category, isAnonymous: ticket.isAnonymous },
+      });
+    }
+
     return { ticket: toAdminTicket(ticket, requesterInfo), messages };
   }
 
-  async updateAsAdmin({ universityId, ticketId, updates }) {
+  async updateAsAdmin({ universityId, ticketId, adminId, updates }) {
     const ticket = await Ticket.findOne({ _id: ticketId, universityId });
     if (!ticket) throw new AppError('Ticket not found.', 404);
 
     const wasResolved = ticket.status === TICKET_STATUS.RESOLVED;
+    // Captured before mutation so the audit entry can record the transition
+    // rather than just the destination — "who closed this, and from what" is
+    // the question an audit trail actually gets asked.
+    const previous = {
+      status: ticket.status,
+      priority: ticket.priority,
+      assignedTo: ticket.assignedTo,
+    };
 
     if (updates.status) {
       ticket.status = updates.status;
@@ -162,6 +224,34 @@ class TicketService {
 
     ticket.lastActivityAt = new Date();
     await ticket.save();
+
+    const entityType = auditEntityFor(ticket);
+    const base = { universityId, entityType, entityId: ticket._id.toString(), performedBy: adminId };
+
+    // One entry per dimension changed, rather than a single lumped "updated" —
+    // status and assignment answer different questions and are filtered
+    // separately in the audit feed. No-op updates are not recorded.
+    if (updates.status && updates.status !== previous.status) {
+      audit({
+        ...base,
+        action: AUDIT_ACTION.TICKET_STATUS_CHANGED,
+        metadata: { from: previous.status, to: updates.status, ticketType: ticket.type },
+      });
+    }
+    if (updates.priority && updates.priority !== previous.priority) {
+      audit({
+        ...base,
+        action: AUDIT_ACTION.TICKET_PRIORITY_CHANGED,
+        metadata: { from: previous.priority, to: updates.priority, ticketType: ticket.type },
+      });
+    }
+    if (updates.assignedTo !== undefined && String(updates.assignedTo) !== String(previous.assignedTo)) {
+      audit({
+        ...base,
+        action: updates.assignedTo ? AUDIT_ACTION.TICKET_ASSIGNED : AUDIT_ACTION.TICKET_UNASSIGNED,
+        metadata: { from: previous.assignedTo, to: updates.assignedTo, ticketType: ticket.type },
+      });
+    }
 
     if (updates.status === TICKET_STATUS.RESOLVED && !wasResolved) {
       notificationServiceClient
@@ -187,11 +277,45 @@ class TicketService {
     });
 
     ticket.lastActivityAt = new Date();
+    const claimedByThisReply = !isInternalNote && !ticket.assignedTo;
     if (!isInternalNote) {
       ticket.status = TICKET_STATUS.WAITING_ON_USER;
       if (!ticket.assignedTo) ticket.assignedTo = adminId; // first reply claims it, like most helpdesks
     }
     await ticket.save();
+
+    const entityType = auditEntityFor(ticket);
+    audit({
+      universityId,
+      entityType,
+      entityId: ticket._id.toString(),
+      action: isInternalNote
+        ? AUDIT_ACTION.TICKET_INTERNAL_NOTE_ADDED
+        : AUDIT_ACTION.TICKET_REPLIED_BY_ADMIN,
+      performedBy: adminId,
+      // Message bodies are deliberately not copied into the audit log: a
+      // grievance reply can contain exactly the sensitive detail the
+      // confidential track exists to contain. The messageId points at it for
+      // anyone with legitimate access.
+      metadata: {
+        messageId: message._id.toString(),
+        ticketType: ticket.type,
+        attachmentCount: attachmentUrls.length,
+      },
+    });
+
+    // The implicit claim is a real assignment change, so it gets its own entry
+    // rather than being invisible inside the reply.
+    if (claimedByThisReply) {
+      audit({
+        universityId,
+        entityType,
+        entityId: ticket._id.toString(),
+        action: AUDIT_ACTION.TICKET_ASSIGNED,
+        performedBy: adminId,
+        metadata: { from: null, to: adminId, via: 'FIRST_REPLY', ticketType: ticket.type },
+      });
+    }
 
     if (!isInternalNote) {
       notificationServiceClient

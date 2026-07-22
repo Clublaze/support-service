@@ -31,6 +31,8 @@ const env = {
   services: {
     authServiceUrl: process.env.AUTH_SERVICE_URL || 'http://localhost:8001',
     notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8004',
+    // club-service owns the shared audit log; see utils/auditServiceClient.js.
+    clubServiceUrl: process.env.CLUB_SERVICE_URL || 'http://localhost:8002',
   },
 
   aws: {

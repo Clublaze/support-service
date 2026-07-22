@@ -76,7 +76,7 @@ class FaqController {
 
   async remove(req, res, next) {
     try {
-      await faqService.remove(req.universityId, req.params.id);
+      await faqService.remove(req.universityId, req.user.id, req.params.id);
       res.success(null, 'Help article deleted');
     } catch (err) {
       next(err);
