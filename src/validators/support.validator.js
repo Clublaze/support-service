@@ -9,13 +9,27 @@ import {
 
 const ALL_CATEGORIES = [...new Set([...SUPPORT_CATEGORIES, ...GRIEVANCE_CATEGORIES])];
 
+// Ticket create/reply travel as multipart (multer), so every field arrives as a
+// string — and `z.coerce.boolean()` is just `Boolean(value)`, which makes the
+// string "false" resolve to true. That silently inverted every unticked
+// checkbox: support tickets were rejected as "anonymous", grievances were
+// marked anonymous nobody asked for, and admin replies became internal notes
+// the requester never saw. Parse the string form explicitly instead.
+const FALSY_FORM_VALUES = new Set(['false', '0', 'no', 'off', '']);
+
+const formBoolean = z.union([z.boolean(), z.string(), z.number()]).transform((value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  return !FALSY_FORM_VALUES.has(value.trim().toLowerCase());
+});
+
 export const createTicketSchema = z
   .object({
     type: z.enum([TICKET_TYPE.SUPPORT, TICKET_TYPE.GRIEVANCE]).default(TICKET_TYPE.SUPPORT),
     category: z.enum(ALL_CATEGORIES, { message: 'Please choose a valid category' }),
     subject: z.string().trim().min(5, 'Subject must be at least 5 characters').max(150),
     description: z.string().trim().min(10, 'Please describe the issue in at least 10 characters').max(5000),
-    isAnonymous: z.coerce.boolean().optional().default(false),
+    isAnonymous: formBoolean.optional().default(false),
   })
   .refine((data) => data.type === TICKET_TYPE.GRIEVANCE || data.isAnonymous === false, {
     message: 'Only grievances can be submitted anonymously',
@@ -35,7 +49,7 @@ export const replyToTicketSchema = z.object({
 
 export const adminReplySchema = z.object({
   body: z.string().trim().min(1, 'Message cannot be empty').max(5000),
-  isInternalNote: z.coerce.boolean().optional().default(false),
+  isInternalNote: formBoolean.optional().default(false),
 });
 
 export const updateTicketSchema = z
@@ -47,7 +61,7 @@ export const updateTicketSchema = z
   .refine((data) => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
 
 export const faqFeedbackSchema = z.object({
-  helpful: z.coerce.boolean(),
+  helpful: formBoolean,
 });
 
 export const createFaqSchema = z.object({
@@ -56,7 +70,7 @@ export const createFaqSchema = z.object({
   question: z.string().trim().min(5).max(300),
   answer: z.string().trim().min(10).max(8000),
   tags: z.array(z.string().trim().min(1)).max(10).optional().default([]),
-  isPublished: z.coerce.boolean().optional().default(true),
+  isPublished: formBoolean.optional().default(true),
   order: z.coerce.number().int().optional().default(0),
 });
 
@@ -112,7 +126,7 @@ export const adminTicketListQuerySchema = z.object({
   category: z.enum(ALL_CATEGORIES).optional(),
   priority: z.enum(Object.values(TICKET_PRIORITY)).optional(),
   assignedTo: z.string().optional(),
-  unassigned: z.coerce.boolean().optional(),
+  unassigned: formBoolean.optional(),
   q: z.string().trim().max(200).optional(),
 });
 

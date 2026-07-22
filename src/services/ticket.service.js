@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Ticket from '../models/Ticket.model.js';
 import TicketMessage from '../models/TicketMessage.model.js';
 import AppError from '../utils/AppError.js';
@@ -202,8 +203,12 @@ class TicketService {
   }
 
   async getAdminSummary(universityId) {
+    // Mongoose casts query filters against the schema, but aggregation pipelines
+    // are passed to the driver untouched — so the string universityId every
+    // caller holds never matches the ObjectId stored on the document, and the
+    // whole summary comes back as zeros. Cast explicitly.
     const results = await Ticket.aggregate([
-      { $match: { universityId: universityId } },
+      { $match: { universityId: new mongoose.Types.ObjectId(universityId) } },
       { $group: { _id: { status: '$status', type: '$type' }, count: { $sum: 1 } } },
     ]);
 
