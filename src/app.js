@@ -34,7 +34,7 @@ if (env.isDev) {
 
 app.use(metricsMiddleware);
 
-// ── Health & metrics — unauthenticated, used by Docker/orchestrator and Prometheus ──
+// ── Health — unauthenticated, used by Docker/orchestrator health checks ──
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'support-service', time: new Date().toISOString() });
 });
@@ -51,7 +51,16 @@ app.get('/ready', (req, res) => {
   res.status(503).json({ status: 'not ready', mongo: mongoUp, redis: redisUp });
 });
 
+// ── Metrics — bearer-token gated, like every other service, so Prometheus is
+// the only reader of internal operational telemetry (request rates, connection
+// state). Nothing else here calls /ready on a schedule, so the connection
+// gauges are refreshed inline on every scrape rather than depending on it.
 app.get('/metrics', async (req, res) => {
+  if (req.get('authorization') !== `Bearer ${env.internalServiceSecret}`) {
+    return res.status(401).end();
+  }
+  mongoConnectionUp.set(mongoose.connection.readyState === 1 ? 1 : 0);
+  redisConnectionUp.set(redis.status === 'ready' ? 1 : 0);
   res.set('Content-Type', register.contentType);
   res.end(await register.metrics());
 });
