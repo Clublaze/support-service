@@ -74,7 +74,8 @@ if (!env.mongoUri) {
 }
 
 
-
+// rather than crashing the whole service on startup — FAQs and tickets should
+// keep working even if nobody has provisioned a key yet.
 if (!env.ai.anthropicApiKey) {
   console.warn('WARNING: ANTHROPIC_API_KEY is not set — /chat will return 503 until it is.');
 }
