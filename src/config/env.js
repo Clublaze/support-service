@@ -57,7 +57,7 @@ const env = {
   },
 };
 
-// Hard fail on startup if critical secrets are missing
+
 if (!env.jwtSecret) {
   console.error('FATAL: JWT_SECRET is not set in environment variables');
   process.exit(1);
