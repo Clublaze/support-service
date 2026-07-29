@@ -73,7 +73,7 @@ if (!env.mongoUri) {
   process.exit(1);
 }
 
-// The chat endpoint fails each request with a clear error if this is missing,
+
 // rather than crashing the whole service on startup — FAQs and tickets should
 // keep working even if nobody has provisioned a key yet.
 if (!env.ai.anthropicApiKey) {
