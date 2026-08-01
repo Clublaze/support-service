@@ -36,6 +36,9 @@ const ticketSchema = new Schema(
 ticketSchema.index({ universityId: 1, status: 1, createdAt: -1 });
 ticketSchema.index({ universityId: 1, type: 1, status: 1 });
 ticketSchema.index({ universityId: 1, requesterId: 1, createdAt: -1 });
-ticketSchema.index({ subject: 'text', description: 'text' });
+// Compounded with universityId (every $text query already filters on it —
+// see ticket.service.js listForAdmin) so a search can't scan every
+// university's tickets before the tenant filter applies (X19).
+ticketSchema.index({ universityId: 1, subject: 'text', description: 'text' }, { name: 'ticket_tenant_text' });
 
 export default mongoose.model('Ticket', ticketSchema);

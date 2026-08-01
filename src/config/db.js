@@ -23,6 +23,11 @@ const connectDB = async () => {
       dns.setServers(env.mongoDnsServers);
     }
 
+    // Every boot otherwise attempts to build every declared index — slow
+    // startup on large collections, and index changes get applied implicitly
+    // by whichever pod restarts first rather than via a reviewed migration (L11).
+    mongoose.set('autoIndex', env.nodeEnv !== 'production');
+
     const conn = await mongoose.connect(env.mongoUri, mongoOptions);
 
     logger.info(`MongoDB connected: ${conn.connection.host}`);

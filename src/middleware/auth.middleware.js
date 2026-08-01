@@ -16,7 +16,7 @@ const authMiddleware = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    // JWT payload from auth-service: { sub, universityId, type, permissions }
+    // JWT payload from auth-service: { sub, universityId, type }
     const decoded = jwt.verify(token, env.jwtSecret);
     const currentUser = await authServiceClient.verifyUser(decoded.sub);
 
@@ -32,7 +32,6 @@ const authMiddleware = async (req, res, next) => {
       id: decoded.sub,          // auth-service uses 'sub' for userId
       universityId: currentUser.universityId?.toString?.() || decoded.universityId,
       userType: currentUser.userType || decoded.type,         // auth-service uses 'type', we expose as 'userType'
-      permissions: decoded.permissions || [],
       tokenVersion: currentUser.tokenVersion ?? 0,
     };
 

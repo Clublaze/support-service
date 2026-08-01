@@ -33,6 +33,16 @@ const errorMiddleware = (err, req, res, next) => {
     });
   }
 
+  // Malformed ObjectId is a client error, not a server fault. Deliberately
+  // does not echo err.value — that is attacker-controlled.
+  if (err.name === 'CastError') {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid ${err.path === '_id' ? 'identifier' : err.path} format.`,
+      data: null,
+    });
+  }
+
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
@@ -67,8 +77,9 @@ const errorMiddleware = (err, req, res, next) => {
     });
   }
 
-  // Unknown errors — hide details in production
-  if (process.env.NODE_ENV === 'production') {
+  // Unknown errors — fail closed: only show stack traces when NODE_ENV is
+  // explicitly "development".
+  if (process.env.NODE_ENV !== 'development') {
     return res.status(500).json({
       success: false,
       message: 'Something went wrong on our end. Please try again.',

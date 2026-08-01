@@ -1,18 +1,23 @@
-FROM node:20-alpine AS builder
-
+FROM node:20-alpine AS deps
 WORKDIR /app
-
 COPY package*.json ./
-RUN npm ci --only=production
-
-COPY . .
+RUN npm ci --omit=dev && npm cache clean --force
 
 FROM node:20-alpine
-
 WORKDIR /app
-
 ENV NODE_ENV=production
 
-COPY --from=builder /app .
+# node_modules is copied from the deps stage BEFORE the app source, so the
+# Alpine-built modules always win over anything a host COPY might otherwise
+# shadow (this is also why sharp — a native module — no longer crashes when
+# built from a Windows/macOS working directory; see .dockerignore).
+COPY --from=deps /app/node_modules ./node_modules
+COPY --chown=node:node . .
 
-CMD ["npm", "start"]
+USER node
+
+EXPOSE 8007
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 CMD wget --spider -q http://localhost:8007/health || exit 1
+
+CMD ["node", "--import", "./src/instrument.js", "src/server.js"]

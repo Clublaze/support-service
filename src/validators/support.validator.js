@@ -80,30 +80,14 @@ export const updateFaqSchema = createFaqSchema.partial().refine((data) => Object
 
 export const chatMessageSchema = z.object({
   message: z.string().trim().min(1, 'Message cannot be empty').max(2000),
-  // Short client-held history, oldest first — this service is stateless
-  // between turns, matching the request/response shape of Anthropic's API.
-  history: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string().max(2000),
-      })
-    )
-    .max(20)
-    .optional()
-    .default([]),
+  // The transcript itself is held server-side (M13) — the client only ever
+  // carries the opaque sessionId forward, never the conversation content, so
+  // fabricated assistant turns can no longer be smuggled in.
+  sessionId: z.string().uuid().optional(),
 });
 
 export const chatEscalateSchema = z.object({
-  history: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string().max(2000),
-      })
-    )
-    .min(1, 'Nothing to escalate yet — send a message first')
-    .max(20),
+  sessionId: z.string().uuid('A valid chat session is required'),
   category: z.enum(SUPPORT_CATEGORIES, { message: 'Please choose a valid category' }),
   additionalDetails: z.string().trim().max(2000).optional().default(''),
 });

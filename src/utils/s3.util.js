@@ -112,12 +112,25 @@ export const getSignedDownloadUrl = async (key, expiresInSeconds = 24 * 60 * 60,
   );
 };
 
-export const extractKeyFromUrl = (url) => {
+export const extractKeyFromUrl = (url, { requirePrefix = null } = {}) => {
   if (!url) return null;
 
-  try {
-    return new URL(url).pathname.slice(1);
-  } catch {
-    return null;
-  }
+  let parsed;
+  try { parsed = new URL(url); } catch { return null; }
+
+  // Prove the URL belongs to OUR bucket before its key is ever handed to
+  // DeleteObjectCommand — see club-service/src/utils/s3.util.js for the
+  // matching fix and the arbitrary-deletion scenario it closes (X31).
+  const allowedHosts = new Set([
+    `${config.bucketName}.s3.${config.region}.amazonaws.com`,
+    `${config.bucketName}.s3.amazonaws.com`,
+    ...(config.baseUrl ? [new URL(config.baseUrl).host] : []),
+  ]);
+  if (!allowedHosts.has(parsed.host)) return null;
+
+  const key = decodeURIComponent(parsed.pathname.slice(1));
+  if (!key || key.includes('..')) return null;
+  if (requirePrefix && !key.startsWith(requirePrefix)) return null;
+
+  return key;
 };

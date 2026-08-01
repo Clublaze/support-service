@@ -6,8 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     container_name: unihub-support-service-prod
-    ports:
-      - "8007:8007"
+    # Not published to the host (C3): the gateway is the single public
+    # ingress and reaches this container over unihub-backend by service name.
+    # Uncomment only for local debugging with an ephemeral/loopback-only port.
+    # ports:
+    #   - "127.0.0.1:8007:8007"
     environment:
       PORT: 8007
       NODE_ENV: production
