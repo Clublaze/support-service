@@ -18,7 +18,12 @@ const env = {
   mongoStartupRetryMs: positiveInteger(process.env.MONGO_STARTUP_RETRY_MS, 10000),
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
 
-  jwtSecret: process.env.JWT_SECRET,
+  // auth-service signs access tokens reading JWT_ACCESS_SECRET; every
+  // verifier reads JWT_SECRET. Same key, two names, nothing asserting they
+  // match — accept either so rotating one name alone cannot 401 the whole
+  // platform. assertJwtSecretConsistency() below rejects the case where both
+  // are set to different values.
+  jwtSecret: process.env.JWT_SECRET || process.env.JWT_ACCESS_SECRET,
 
   internalServiceSecret: process.env.INTERNAL_SERVICE_SECRET,
 
@@ -59,7 +64,22 @@ const env = {
 
 // Hard fail on startup if critical secrets are missing
 if (!env.jwtSecret) {
-  console.error('FATAL: JWT_SECRET is not set in environment variables');
+  console.error('FATAL: neither JWT_SECRET nor JWT_ACCESS_SECRET is set in environment variables');
+  process.exit(1);
+}
+
+// Both names resolve to env.jwtSecret above, but setting them to DIFFERENT
+// values means this service verifies with a key auth-service never signs with
+// — every request 401s, with nothing pointing at the cause.
+if (
+  process.env.JWT_SECRET &&
+  process.env.JWT_ACCESS_SECRET &&
+  process.env.JWT_SECRET !== process.env.JWT_ACCESS_SECRET
+) {
+  console.error(
+    'FATAL: JWT_SECRET and JWT_ACCESS_SECRET are both set but differ — they are the same signing ' +
+    'key under two names (auth-service signs with JWT_ACCESS_SECRET). Set them equal, or set only one.',
+  );
   process.exit(1);
 }
 
